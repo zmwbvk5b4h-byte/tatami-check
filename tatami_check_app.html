@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="たたみ機点検">
+<title>たたみ機 点検チェック</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif;background:#f5f5f5;color:#111}
+  header{position:sticky;top:0;z-index:5;background:white;border-bottom:1px solid #ccc;padding:10px 10px calc(10px + env(safe-area-inset-top))}
+  h1{font-size:18px;margin:0 0 8px;font-weight:700}
+  .tabs{display:flex;gap:6px;overflow-x:auto}
+  .tab{border:1px solid #aaa;background:#fff;border-radius:8px;padding:8px 12px;white-space:nowrap;font-weight:600}
+  .tab.active{background:#222;color:#fff}
+  .toolbar{display:flex;gap:7px;margin-top:8px}
+  button{font:inherit}
+  .tool{border:1px solid #aaa;background:#fff;border-radius:7px;padding:7px 10px}
+  main{padding:10px 8px 40px}
+  .machine{display:none}
+  .machine.active{display:block}
+  .title{font-weight:700;font-size:16px;margin:3px 0 8px}
+  table{width:100%;border-collapse:collapse;background:#fff;table-layout:fixed}
+  th,td{border:1px solid #aaa}
+  th{height:42px;text-align:left;padding:7px;font-size:15px}
+  th.status{width:31%;text-align:center}
+  td.item{padding:10px 7px;font-size:16px;line-height:1.25}
+  td.statusCell{width:31%;min-height:54px;height:58px;text-align:center;vertical-align:middle;font-size:23px;font-weight:600;word-break:break-all}
+  .statusCell:focus{outline:3px solid #8ab4f8;outline-offset:-3px}
+  .hint{font-size:12px;color:#666;margin:8px 2px}
+  .noteBox{margin-top:12px;background:white;border:1px solid #aaa;border-radius:8px;padding:8px}
+  .noteBox label{display:block;font-size:13px;font-weight:700;margin-bottom:5px}
+  textarea{width:100%;min-height:72px;border:1px solid #bbb;border-radius:6px;padding:8px;font:inherit;resize:vertical}
+  .footer{font-size:11px;color:#777;margin-top:10px;text-align:center}
+  @media(min-width:700px){
+    main{max-width:850px;margin:auto}
+    td.item{font-size:18px}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>たたみ機 メンテナンス点検</h1>
+  <div class="tabs" id="tabs"></div>
+  <div class="toolbar">
+    <button class="tool" onclick="clearCurrent()">このページをリセット</button>
+    <button class="tool" onclick="clearAll()">全部リセット</button>
+  </div>
+</header>
+
+<main id="main"></main>
+
+<script>
+const items = [
+  "モーター点検",
+  "変速機点検",
+  "Ｖベルト点検",
+  "ピローブロック点検",
+  "ローラーチェーン点検",
+  "スプロケット点検",
+  "アイドラスプロケット点検（テンション張り）",
+  "ベアリング点検",
+  "クランク点検",
+  "生地折り込みバー用ゴム車輪点検",
+  "生地抑え板点検"
+];
+
+const machines = [
+  "たたみ直し機",
+  "スマート１番線",
+  "スマート２番線",
+  "スマート３番線"
+];
+
+const key = "tatami_check_v1";
+let data = JSON.parse(localStorage.getItem(key) || "{}");
+
+function save(){ localStorage.setItem(key, JSON.stringify(data)); }
+
+function getPage(i){
+  if(!data[i]) data[i] = {cells:Array(items.length).fill(""), note:""};
+  return data[i];
+}
+
+function renderTabs(){
+  const tabs = document.getElementById("tabs");
+  tabs.innerHTML = machines.map((m,i)=>
+    `<button class="tab ${i===0?'active':''}" onclick="showPage(${i})">${m}</button>`
+  ).join("");
+}
+
+function render(){
+  const main = document.getElementById("main");
+  main.innerHTML = machines.map((m,mi)=>{
+    const p=getPage(mi);
+    return `<section class="machine ${mi===0?'active':''}" id="page${mi}">
+      <div class="title">${m} メンテナンス内容</div>
+      <table>
+        <thead><tr><th>点検項目</th><th class="status">済記入欄</th></tr></thead>
+        <tbody>
+        ${items.map((item,i)=>`
+          <tr>
+            <td class="item">${item}</td>
+            <td class="statusCell"
+                contenteditable="true"
+                spellcheck="false"
+                data-page="${mi}" data-cell="${i}"
+                onclick="cellTap(this)"
+                oninput="cellInput(this)"
+                onkeydown="cellKey(event,this)">${escapeHtml(p.cells[i])}</td>
+          </tr>`).join("")}
+        </tbody>
+      </table>
+      <div class="hint">💡 済記入欄をタップ → 「○」が入ります。文字もそのまま入力できます。もう一度タップして編集・削除OK。</div>
+      <div class="noteBox">
+        <label>メモ・異常内容など</label>
+        <textarea placeholder="例：Vベルト少し緩みあり、後日交換予定…" oninput="noteInput(${mi},this)">${escapeHtml(p.note)}</textarea>
+      </div>
+      <div class="footer">入力内容はこの端末のブラウザに自動保存されます。</div>
+    </section>`;
+  }).join("");
+}
+
+function escapeHtml(s){
+  return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+function cellTap(el){
+  // 空欄をタップしたときだけ自動で○を入れる。
+  // すでに入力済みなら編集できるようにそのままにする。
+  if(el.textContent.trim()===""){
+    el.textContent="○";
+    placeCaretEnd(el);
+    cellInput(el);
+  }
+}
+
+function cellInput(el){
+  const p=Number(el.dataset.page), c=Number(el.dataset.cell);
+  getPage(p).cells[c]=el.innerText.replace(/\n/g,"").trim();
+  save();
+}
+
+function cellKey(e,el){
+  if(e.key==="Enter"){
+    e.preventDefault();
+    el.blur();
+  }
+}
+
+function placeCaretEnd(el){
+  el.focus();
+  const r=document.createRange();
+  r.selectNodeContents(el); r.collapse(false);
+  const s=window.getSelection(); s.removeAllRanges(); s.addRange(r);
+}
+
+function noteInput(mi,el){
+  getPage(mi).note=el.value;
+  save();
+}
+
+function showPage(i){
+  document.querySelectorAll(".machine").forEach((x,n)=>x.classList.toggle("active",n===i));
+  document.querySelectorAll(".tab").forEach((x,n)=>x.classList.toggle("active",n===i));
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
+function clearCurrent(){
+  const active=[...document.querySelectorAll(".machine")].findIndex(x=>x.classList.contains("active"));
+  if(!confirm(`${machines[active]} の入力を全部消しますか？`)) return;
+  data[active]={cells:Array(items.length).fill(""),note:""};
+  save(); render();
+  showPage(active);
+}
+
+function clearAll(){
+  if(!confirm("4台分の入力を全部消しますか？")) return;
+  data={}; save(); render(); showPage(0);
+}
+
+renderTabs();
+render();
+</script>
+</body>
+</html>
